@@ -1,0 +1,25 @@
+{
+  "name": "purescript-smolder-dom",
+  "license": "LGPL-3.0+",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/bodil/purescript-smolder-dom.git"
+  },
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^3.0.0",
+    "purescript-dom": "^4.3.1",
+    "purescript-smolder": "^8.0.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^3.0.0",
+    "purescript-test-unit": "^11.0.0",
+    "purescript-refs": "^3.0.0",
+    "purescript-exceptions": "^3.0.0"
+  }
+}

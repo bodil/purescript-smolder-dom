@@ -1,0 +1,10 @@
+{
+  "name": "purescript-smolder-dom",
+  "devDependencies": {
+    "jsdom": "^10.1.0"
+  },
+  "scripts": {
+    "preinstall": "bower install",
+    "test": "pulp test"
+  }
+}
