@@ -24,10 +24,10 @@ import Test.Unit (Test, failure, test)
 import Test.Unit.Assert (assert, equal)
 import Test.Unit.Console (TESTOUTPUT)
 import Test.Unit.Main (runTest)
-import Text.Smolder.HTML (blockquote, button, div, p)
+import Text.Smolder.HTML (blockquote, button, div, h1, h2, h3, p)
 import Text.Smolder.HTML.Attributes (className, id)
 import Text.Smolder.Markup (Markup, on, text, (!), (#!))
-import Text.Smolder.Renderer.DOM (render)
+import Text.Smolder.Renderer.DOM (patch, render)
 import Prelude hiding (div,id)
 
 foreign import runWithDom :: ∀ e a. Eff e a → Eff e a
@@ -75,3 +75,17 @@ main = runWithDom $ runTest do
       Right b → do
         liftEff $ click b
         l.wasCalled >>= assert "button's event handler wasn't called"
+
+  test "patch an existing node" do
+    doc ← liftEff $ render' $ do
+          h1 $ text "header"
+          div ! className "lol" $ do
+            p $ text "omg hai"
+            p $ text "omg lol"
+            p $ text "omg wat"
+    liftEff $ patch doc $ do
+      h2 $ text "subheader"
+      div ! id "wat" $ do
+        h3 $ text "subsubheader"
+        p $ text "nope"
+    assertHTML "<h2>subheader</h2><div id=\"wat\"><h3>subsubheader</h3><p>nope</p></div>" doc
