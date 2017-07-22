@@ -10,6 +10,23 @@ exports.makeText = function(text) {
   };
 };
 
+exports.nodeListToArray = function(list) {
+  return function() {
+    return Array.from(list);
+  };
+}
+
+exports.foldlAList = function(f) {
+  return function(b) {
+    return function(l) {
+      for (var i = l.index, len = l.array.length; i < len; i++) {
+        b = f(b)(l.array[i]);
+      }
+      return b;
+    };
+  };
+}
+
 // The following patch functions are ported from:
 // https://github.com/yoshuawuyts/nanomorph/blob/master/lib/morph.js
 
