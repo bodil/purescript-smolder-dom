@@ -14,7 +14,7 @@
   "dependencies": {
     "purescript-prelude": "^3.0.0",
     "purescript-dom": "^4.3.1",
-    "purescript-smolder": "^10.0.0",
+    "purescript-smolder": "matthewleon/purescript-smolder#namespace",
     "purescript-refs": "^3.0.0",
     "purescript-safely": "^3.0.0",
     "purescript-foldable-traversable": "^3.4.0"

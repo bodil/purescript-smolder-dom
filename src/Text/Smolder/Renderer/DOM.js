@@ -4,6 +4,14 @@ exports.makeElement = function(name) {
   };
 };
 
+exports.makeElementNS = function(ns) {
+  return function(name) {
+    return function() {
+      return window.document.createElementNS(ns, name);
+    };
+  };
+};
+
 exports.makeText = function(text) {
   return function() {
     return window.document.createTextNode(text);

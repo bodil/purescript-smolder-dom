@@ -26,12 +26,13 @@ import Data.String (toUpper)
 import Data.Traversable (foldMapDefaultL)
 import Data.Tuple (Tuple(..))
 import Partial.Unsafe (unsafePartial)
-import Text.Smolder.Markup (Attr(..), EventHandler(..), Markup, MarkupM(..))
+import Text.Smolder.Markup (NS(..), Attr(..), EventHandler(..), Markup, MarkupM(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 type E eff = EventListener (dom :: DOM | eff)
 
 foreign import makeElement :: ∀ eff. String → Eff (dom :: DOM | eff) Element
+foreign import makeElementNS :: ∀ eff. String → String → Eff (dom :: DOM | eff) Element
 foreign import makeText :: ∀ eff. String → Eff (dom :: DOM | eff) Text
 foreign import nodeListToArray :: ∀ eff. NodeList → Eff (dom :: DOM | eff) (Array Node)
 foreign import foldlAList :: ∀ a b. (b → a → b) → b → AList a → b
@@ -65,12 +66,16 @@ setEvent :: ∀ eff. Element → EventHandler (E eff) → Eff (dom :: DOM | eff)
 setEvent n (EventHandler event handler) =
   addEventListener (EventType event) handler false $ elementToEventTarget n
 
-element :: ∀ eff. String → CatList Attr → CatList (EventHandler (E eff)) → Eff (dom :: DOM | eff) Element
-element name attrs events = do
-  el ← makeElement name
+element :: ∀ eff. NS → String → CatList Attr → CatList (EventHandler (E eff)) → Eff (dom :: DOM | eff) Element
+element ns name attrs events = do
+  el ← makeElement' ns name
   setAttributes el attrs
   traverse_ (setEvent el) events
   pure el
+
+makeElement' :: ∀ eff. NS → String → Eff (dom :: DOM | eff) Element
+makeElement' HTMLns = makeElement
+makeElement' SVGns  = makeElementNS "http://www.w3.org/2000/svg"
 
 -- | Render some Smolder markup into a target DOM element.
 -- |
@@ -80,8 +85,8 @@ render :: ∀ eff. Element → Markup (E eff) → Eff (dom :: DOM | eff) Unit
 render target = foldFree (renderNode target)
 
 renderNode :: ∀ foo eff. Element → MarkupM (E eff) foo → Eff (dom :: DOM | eff) foo
-renderNode p (Element name children attrs events rest) = do
-  el ← element name attrs events
+renderNode p (Element ns name children attrs events rest) = do
+  el ← element ns name attrs events
   render el children
   _ ← appendChild (elementToNode el) (elementToNode p)
   pure rest
@@ -151,10 +156,10 @@ walk parent ref (Content text rest) = pop ref >>= \node' → case node' of
       void $ replaceChild (textToNode textNode) node parent
     pure rest
 
-walk parent ref (Element name children attrs events rest) = pop ref >>= \node' → case node' of
+walk parent ref (Element ns name children attrs events rest) = pop ref >>= \node' → case node' of
   Nothing → do
     -- add element past end of existing children
-    el ← element name attrs events
+    el ← element ns name attrs events
     patch el children
     _ ← appendChild (elementToNode el) parent
     pure rest
@@ -169,7 +174,7 @@ walk parent ref (Element name children attrs events rest) = pop ref >>= \node' �
         patch (unsafeCoerce node) children
       -- current node isn't patchable: replace it
       _, _ → do
-        el ← element name attrs events
+        el ← element ns name attrs events
         patch el children
         void $ replaceChild (elementToNode el) node parent
     pure rest
