@@ -4,6 +4,14 @@ exports.makeElement = function(name) {
   };
 };
 
+exports.makeElementNS = function(ns) {
+  return function(name) {
+    return function() {
+      return window.document.createElementNS(ns, name);
+    };
+  };
+};
+
 exports.makeText = function(text) {
   return function() {
     return window.document.createTextNode(text);
@@ -14,7 +22,7 @@ exports.nodeListToArray = function(list) {
   return function() {
     return Array.from(list);
   };
-}
+};
 
 exports.foldlAList = function(f) {
   return function(b) {
@@ -25,7 +33,7 @@ exports.foldlAList = function(f) {
       return b;
     };
   };
-}
+};
 
 // The following patch functions are ported from:
 // https://github.com/yoshuawuyts/nanomorph/blob/master/lib/morph.js

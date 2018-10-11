@@ -5,38 +5,39 @@ module Text.Smolder.Renderer.DOM
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Ref (Ref, modifyRef', newRef, readRef)
-import Control.Monad.Eff.Ref.Unsafe (unsafeRunRef)
 import Control.Monad.Free (foldFree)
 import Control.Safely (for_, traverse_)
-import DOM (DOM)
-import DOM.Event.EventTarget (EventListener, addEventListener)
-import DOM.Event.Types (EventType(..))
-import DOM.Node.Element (setAttribute)
-import DOM.Node.Node (appendChild, childNodes, nodeName, nodeType, removeChild, replaceChild, setNodeValue)
-import DOM.Node.NodeType (NodeType(..))
-import DOM.Node.Types (Element, Node, NodeList, Text, elementToEventTarget, elementToNode, textToNode)
 import Data.Array as Array
 import Data.CatList (CatList)
 import Data.Foldable (class Foldable, foldrDefault)
 import Data.Maybe (Maybe(Just, Nothing))
-import Data.StrMap (StrMap, fromFoldable)
 import Data.String (toUpper)
 import Data.Traversable (foldMapDefaultL)
 import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Foreign.Object (Object, fromFoldable)
 import Partial.Unsafe (unsafePartial)
-import Text.Smolder.Markup (Attr(..), EventHandler(..), Markup, MarkupM(..))
+import Text.Smolder.Markup (Attr(..), EventHandler(..), Markup, MarkupM(..), NS(..))
 import Unsafe.Coerce (unsafeCoerce)
+import Web.DOM (Element, Node, NodeList)
+import Web.DOM.Element (setAttribute)
+import Web.DOM.Element as Element
+import Web.DOM.Node (appendChild, childNodes, nodeName, nodeType, removeChild, replaceChild, setNodeValue)
+import Web.DOM.NodeType (NodeType(..))
+import Web.DOM.Text (Text)
+import Web.DOM.Text as Text
+import Web.Event.Event (EventType(..))
+import Web.Event.EventTarget (EventListener, addEventListener)
 
-type E eff = EventListener (dom :: DOM | eff)
-
-foreign import makeElement :: ∀ eff. String → Eff (dom :: DOM | eff) Element
-foreign import makeText :: ∀ eff. String → Eff (dom :: DOM | eff) Text
-foreign import nodeListToArray :: ∀ eff. NodeList → Eff (dom :: DOM | eff) (Array Node)
+foreign import makeElement :: String → Effect Element
+foreign import makeElementNS :: String → String → Effect Element
+foreign import makeText :: String → Effect Text
+foreign import nodeListToArray :: NodeList → Effect (Array Node)
 foreign import foldlAList :: ∀ a b. (b → a → b) → b → AList a → b
-foreign import patchAttributes :: ∀ eff. Element → StrMap String → Eff (dom :: DOM | eff) Unit
-foreign import patchEventListeners :: ∀ eff. Element → StrMap (E eff) → Eff (dom :: DOM | eff) Unit
+foreign import patchAttributes :: Element → Object String → Effect Unit
+foreign import patchEventListeners :: Element → Object EventListener → Effect Unit
 
 
 
@@ -55,19 +56,23 @@ instance foldableAList :: Foldable AList where
 
 
 
-setAttr :: ∀ eff. Element → Attr → Eff (dom :: DOM | eff) Unit
+setAttr :: Element → Attr → Effect Unit
 setAttr n (Attr k v) = setAttribute k v n
 
-setAttributes :: ∀ eff. Element → CatList Attr → Eff (dom :: DOM | eff) Unit
+setAttributes :: Element → CatList Attr → Effect Unit
 setAttributes n = traverse_ (setAttr n)
 
-setEvent :: ∀ eff. Element → EventHandler (E eff) → Eff (dom :: DOM | eff) Unit
+setEvent :: Element → EventHandler EventListener → Effect Unit
 setEvent n (EventHandler event handler) =
-  addEventListener (EventType event) handler false $ elementToEventTarget n
+  addEventListener (EventType event) handler false $ Element.toEventTarget n
 
-element :: ∀ eff. String → CatList Attr → CatList (EventHandler (E eff)) → Eff (dom :: DOM | eff) Element
-element name attrs events = do
-  el ← makeElement name
+element :: NS → String → CatList Attr → CatList (EventHandler EventListener) → Effect Element
+element ns name attrs events = do
+  let
+    makeElement' = case ns of
+      HTMLns → makeElement
+      SVGns → makeElementNS "http://www.w3.org/2000/svg"
+  el ← makeElement' name
   setAttributes el attrs
   traverse_ (setEvent el) events
   pure el
@@ -76,30 +81,30 @@ element name attrs events = do
 -- |
 -- | Please note that this only appends the Smolder markup as new
 -- | child nodes; it does not overwrite the target's current children.
-render :: ∀ eff. Element → Markup (E eff) → Eff (dom :: DOM | eff) Unit
+render :: Element → Markup EventListener → Effect Unit
 render target = foldFree (renderNode target)
 
-renderNode :: ∀ foo eff. Element → MarkupM (E eff) foo → Eff (dom :: DOM | eff) foo
-renderNode p (Element name children attrs events rest) = do
-  el ← element name attrs events
+renderNode :: ∀ foo. Element → MarkupM EventListener foo → Effect foo
+renderNode p (Element ns name children attrs events rest) = do
+  el ← element ns name attrs events
   render el children
-  _ ← appendChild (elementToNode el) (elementToNode p)
+  _ ← appendChild (Element.toNode el) (Element.toNode p)
   pure rest
 renderNode p (Content text rest) = do
   textNode ← makeText text
-  _ ← appendChild (textToNode textNode) (elementToNode p)
+  _ ← appendChild (Text.toNode textNode) (Element.toNode p)
   pure rest
 renderNode p (Empty rest) = pure rest
 
 
 
-asAList :: ∀ eff. NodeList → Eff (dom :: DOM | eff) (AList Node)
+asAList :: NodeList → Effect (AList Node)
 asAList = nodeListToArray >>> map \a → (AList {index: 0, array: a})
 
-childrenOf :: ∀ eff. Node → Eff (dom :: DOM | eff) (AList Node)
+childrenOf :: Node → Effect (AList Node)
 childrenOf parent = childNodes parent >>= asAList
 
-removeNodes :: ∀ eff. Node → AList Node → Eff (dom :: DOM | eff) Unit
+removeNodes :: Node → AList Node → Effect Unit
 removeNodes parent children = for_ children \child → do
   _ ← removeChild child parent
   pure unit
@@ -113,27 +118,27 @@ removeNodes parent children = for_ children \child → do
 -- | Please note that this function is currently not very smart -- it
 -- | can't tell if a child node has moved inside its parent, and will
 -- | not be able to reuse such nodes. (TODO)
-patch :: ∀ eff. Element → Markup (E eff) → Eff (dom :: DOM | eff) Unit
+patch :: Element → Markup EventListener → Effect Unit
 patch parent markup = do
-  let node = elementToNode parent
+  let node = Element.toNode parent
   children ← childrenOf node
-  childRef ← unsafeRunRef $ newRef children
+  childRef ← Ref.new children
   foldFree (walk node childRef) markup
-  remainder ← unsafeRunRef $ readRef childRef
+  remainder ← Ref.read childRef
   removeNodes node remainder
 
-pop :: ∀ eff. Ref (AList Node) → Eff (dom :: DOM | eff) (Maybe Node)
-pop ref = unsafeRunRef $ do
-  modifyRef' ref pop'
+pop :: Ref (AList Node) → Effect (Maybe Node)
+pop ref = do
+  Ref.modify' pop' ref
     where
       pop' l = case uncons l of
         Just (Tuple car cdr) → {state: cdr, value: Just car}
         Nothing → {state: l, value: Nothing}
 
-walk :: ∀ eff. Node → Ref (AList Node) → MarkupM (E eff) ~> Eff (dom :: DOM | eff)
+walk :: Node → Ref (AList Node) → MarkupM EventListener ~> Effect
 walk parent ref (Empty rest) = do
   -- this node has no children, so remove them if they exist
-  children ← unsafeRunRef $ readRef ref
+  children ← Ref.read ref
   removeNodes parent children
   pure rest
 
@@ -141,22 +146,22 @@ walk parent ref (Content text rest) = pop ref >>= \node' → case node' of
   Nothing → do
     -- add a text node past end of existing children
     textNode ← makeText text
-    _ ← appendChild (textToNode textNode) parent
+    _ ← appendChild (Text.toNode textNode) parent
     pure rest
   Just node → do
     -- patch a text node
     let t = unsafePartial $ nodeType node
     if t == TextNode then setNodeValue text node else do
       textNode ← makeText text
-      void $ replaceChild (textToNode textNode) node parent
+      void $ replaceChild (Text.toNode textNode) node parent
     pure rest
 
-walk parent ref (Element name children attrs events rest) = pop ref >>= \node' → case node' of
+walk parent ref (Element ns name children attrs events rest) = pop ref >>= \node' → case node' of
   Nothing → do
     -- add element past end of existing children
-    el ← element name attrs events
+    el ← element ns name attrs events
     patch el children
-    _ ← appendChild (elementToNode el) parent
+    _ ← appendChild (Element.toNode el) parent
     pure rest
   Just node → do
     -- patch an element
@@ -169,15 +174,15 @@ walk parent ref (Element name children attrs events rest) = pop ref >>= \node' �
         patch (unsafeCoerce node) children
       -- current node isn't patchable: replace it
       _, _ → do
-        el ← element name attrs events
+        el ← element ns name attrs events
         patch el children
-        void $ replaceChild (elementToNode el) node parent
+        void $ replaceChild (Element.toNode el) node parent
     pure rest
 
-patchAttrs :: ∀ eff. Element → CatList Attr → Eff (dom :: DOM | eff) Unit
+patchAttrs :: Element → CatList Attr → Effect Unit
 patchAttrs node attrs = patchAttributes node (fromFoldable (map toTuple attrs))
   where toTuple (Attr key value) = Tuple key value
 
-patchEvents :: ∀ eff. Element → CatList (EventHandler (E eff)) → Eff (dom :: DOM | eff) Unit
+patchEvents :: Element → CatList (EventHandler EventListener) → Effect Unit
 patchEvents node events = patchEventListeners node (fromFoldable (map toTuple events))
   where toTuple (EventHandler event listener) = Tuple event listener
