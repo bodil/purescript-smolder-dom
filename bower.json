@@ -12,17 +12,20 @@
     "output"
   ],
   "dependencies": {
-    "purescript-prelude": "^3.0.0",
-    "purescript-dom": "^4.3.1",
-    "purescript-smolder": "^10.0.0",
-    "purescript-refs": "^3.0.0",
-    "purescript-safely": "^3.0.0",
-    "purescript-foldable-traversable": "^3.4.0"
+    "purescript-prelude": "^4.0.0",
+    "purescript-web-dom": "^1.0.0",
+    "purescript-smolder": "^11.0.0",
+    "purescript-refs": "^4.0.0",
+    "purescript-safely": "^4.0.0",
+    "purescript-foldable-traversable": "^4.0.0",
+    "purescript-foreign-object": "^1.0.0"
   },
   "devDependencies": {
-    "purescript-psci-support": "^3.0.0",
-    "purescript-test-unit": "^11.0.0",
-    "purescript-refs": "^3.0.0",
-    "purescript-exceptions": "^3.0.0"
+    "purescript-psci-support": "^4.0.0",
+    "purescript-test-unit": "^14.0.0",
+    "purescript-refs": "^4.0.0",
+    "purescript-exceptions": "^4.0.0",
+    "purescript-foreign": "^5.0.0",
+    "purescript-web-html": "^1.2.0"
   }
 }
