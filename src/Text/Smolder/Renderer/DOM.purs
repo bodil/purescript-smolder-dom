@@ -19,7 +19,7 @@ import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Foreign.Object (Object, fromFoldable)
 import Partial.Unsafe (unsafePartial)
-import Text.Smolder.Markup (Attr(..), EventHandler(..), Markup, MarkupM(..))
+import Text.Smolder.Markup (Attr(..), EventHandler(..), Markup, MarkupM(..), NS(..))
 import Unsafe.Coerce (unsafeCoerce)
 import Web.DOM (Element, Node, NodeList)
 import Web.DOM.Element (setAttribute)
@@ -32,6 +32,7 @@ import Web.Event.Event (EventType(..))
 import Web.Event.EventTarget (EventListener, addEventListener)
 
 foreign import makeElement :: String → Effect Element
+foreign import makeElementNS :: String → String → Effect Element
 foreign import makeText :: String → Effect Text
 foreign import nodeListToArray :: NodeList → Effect (Array Node)
 foreign import foldlAList :: ∀ a b. (b → a → b) → b → AList a → b
@@ -65,9 +66,13 @@ setEvent :: Element → EventHandler EventListener → Effect Unit
 setEvent n (EventHandler event handler) =
   addEventListener (EventType event) handler false $ Element.toEventTarget n
 
-element :: String → CatList Attr → CatList (EventHandler EventListener) → Effect Element
-element name attrs events = do
-  el ← makeElement name
+element :: NS → String → CatList Attr → CatList (EventHandler EventListener) → Effect Element
+element ns name attrs events = do
+  let
+    makeElement' = case ns of
+      HTMLns → makeElement
+      SVGns → makeElementNS "http://www.w3.org/2000/svg"
+  el ← makeElement' name
   setAttributes el attrs
   traverse_ (setEvent el) events
   pure el
@@ -80,8 +85,8 @@ render :: Element → Markup EventListener → Effect Unit
 render target = foldFree (renderNode target)
 
 renderNode :: ∀ foo. Element → MarkupM EventListener foo → Effect foo
-renderNode p (Element _ name children attrs events rest) = do
-  el ← element name attrs events
+renderNode p (Element ns name children attrs events rest) = do
+  el ← element ns name attrs events
   render el children
   _ ← appendChild (Element.toNode el) (Element.toNode p)
   pure rest
@@ -151,10 +156,10 @@ walk parent ref (Content text rest) = pop ref >>= \node' → case node' of
       void $ replaceChild (Text.toNode textNode) node parent
     pure rest
 
-walk parent ref (Element _ name children attrs events rest) = pop ref >>= \node' → case node' of
+walk parent ref (Element ns name children attrs events rest) = pop ref >>= \node' → case node' of
   Nothing → do
     -- add element past end of existing children
-    el ← element name attrs events
+    el ← element ns name attrs events
     patch el children
     _ ← appendChild (Element.toNode el) parent
     pure rest
@@ -169,7 +174,7 @@ walk parent ref (Element _ name children attrs events rest) = pop ref >>= \node'
         patch (unsafeCoerce node) children
       -- current node isn't patchable: replace it
       _, _ → do
-        el ← element name attrs events
+        el ← element ns name attrs events
         patch el children
         void $ replaceChild (Element.toNode el) node parent
     pure rest
